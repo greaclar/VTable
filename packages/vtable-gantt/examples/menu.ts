@@ -60,6 +60,10 @@ export const menus = [
   },
   {
     path: 'gantt',
+    name: 'gantt-treeDependency'
+  },
+  {
+    path: 'gantt',
     name: 'gantt-listTable'
   }
   //   ]

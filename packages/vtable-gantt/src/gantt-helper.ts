@@ -86,6 +86,10 @@ export function getVerticalScrollBarSize(scrollStyle?: IScrollStyle): number {
 
 export { isNode };
 
+/**
+ * 格式化实例化的options中与gantt相关的配置，并放入到gantt实例的parsedOptions中
+ * @param gantt gantt实例
+ */
 export function initOptions(gantt: Gantt) {
   const options = gantt.options;
   gantt.parsedOptions.pixelRatio = options?.pixelRatio ?? 1;
@@ -595,9 +599,23 @@ export function updateSplitLineAndResizeLine(gantt: Gantt) {
 }
 
 export function findRecordByTaskKey(records: any[], taskKeyField: string, taskKey: string | number) {
+  const tem: any[] = [];
+  traverseExpendTree(records, node => tem.push(node));
+  records = tem;
   for (let i = 0; i < records.length; i++) {
     if (records[i][taskKeyField] === taskKey) {
       return { record: records[i], index: i };
+    }
+  }
+}
+
+// 后续遍历树形结构，返回所有展开的节点，如果是折叠的父节点，只包括它自己
+export function traverseExpendTree(tree: any[], callback: (node: any, parentNode?: any) => void, parentNode?: any) {
+  for (let i = 0; i < tree.length; i++) {
+    const node = tree[i];
+    callback(node, parentNode);
+    if (node.children && node.children.length > 0 && node.hierarchyState === 'expand') {
+      traverseExpendTree(node.children, callback, node);
     }
   }
 }

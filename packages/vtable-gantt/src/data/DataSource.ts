@@ -13,6 +13,9 @@ export class DataSource {
     this.maxDate = _gantt.parsedOptions.maxDate;
     this.processRecords();
   }
+  /**
+   * 根据所有一级的records，修正minDate和maxDate的值，并放入parsedOptions中
+   */
   processRecords() {
     const needMinDate = !this.minDate;
     const needMaxDate = !this.maxDate;

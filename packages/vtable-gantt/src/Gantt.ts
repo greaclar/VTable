@@ -42,6 +42,13 @@ import { EventTarget } from './event/EventTarget';
 import { createDateAtMidnight, formatDate, isPropertyWritable, parseDateFormat } from './tools/util';
 import { DataSource } from './data/DataSource';
 // import { generateGanttChartColumns } from './gantt-helper';
+
+/**
+ * 创建一个div，并设置自身合适的padding和宽高，通过获取外盒子的绝对宽高，确保自己的宽高适应父级容器
+ * @param padding {top, right, bottom, left}
+ * @param className 追加到创建div的class
+ * @returns 新创建的div
+ */
 export function createRootElement(padding: any, className: string = 'vtable-gantt'): HTMLElement {
   const element = document.createElement('div');
   element.setAttribute('tabindex', '0');
@@ -58,7 +65,9 @@ export function createRootElement(padding: any, className: string = 'vtable-gant
   return element;
 }
 export class Gantt extends EventTarget {
+  // 实例化gantt的options（初始化tableList和gantt）
   options: GanttConstructorOptions;
+  // 实例化gantt的html元素（会用来初始化tableList）
   container: HTMLElement;
   /** 相比于canvas的宽度  会减掉:右侧frame边框的宽度 以及中间分割线verticalSplitLine.lineWidth  */
   tableNoFrameWidth: number;
@@ -70,17 +79,21 @@ export class Gantt extends EventTarget {
    */
   tableX: number;
   tableY: number;
+  // 场景图
   scenegraph: Scenegraph;
+  // 滚动条、任务等元素宽度位置数值的数据源
   stateManager: StateManager;
+  // 事件管理，只有自己的赶图图事件
   eventManager: EventManager;
-
+  // 左侧列表的实例
   taskListTableInstance?: ListTable;
-
+  // 用于画甘特图的canvas元素
   canvas: HTMLCanvasElement;
+  // 内部创建用于画甘特图的canvas的外部div元素
   element: HTMLElement;
   verticalSplitResizeLine: HTMLDivElement;
   horizontalSplitLine: HTMLDivElement;
-  context: CanvasRenderingContext2D;
+  context: CanvasRenderingContext2D; // 画布上下文
 
   timeLineHeaderLevel: number;
   itemCount: number;
@@ -91,6 +104,7 @@ export class Gantt extends EventTarget {
   parsedOptions: {
     timeLineHeaderRowHeights: number[];
     rowHeight: number;
+    // 日历当中，一列的宽度，默认60
     timelineColWidth: number;
     colWidthPerDay: number; //分配给每日的宽度
 
@@ -168,6 +182,7 @@ export class Gantt extends EventTarget {
     this.container = container;
     this.options = options;
 
+    // 如果传递了taskTableWidth，则使用传递的值，否则先记为-1
     this.taskTableWidth =
       typeof options?.taskListTable?.tableWidth === 'number' ? options?.taskListTable?.tableWidth : -1; //-1 只是作为标记  后续判断该值进行自动计算宽度
     this.taskTableColumns = options?.taskListTable?.columns ?? [];
@@ -175,14 +190,18 @@ export class Gantt extends EventTarget {
 
     this._sortScales();
     initOptions(this);
+    // 记录records，并根据一级父节点的时间跨度，修正maxDate和minDate的值，记录到this.parsedOptions中
     this.data = new DataSource(this);
+    // 生成日历列
     this._generateTimeLineDateMap();
-
+    // 一个有几级表头
     this.timeLineHeaderLevel = this.parsedOptions.sortedTimelineScales.length;
     this.element = createRootElement({ top: 0, right: 0, left: 0, bottom: 0 }, 'vtable-gantt');
     // this.element.style.top = '0px';
+    // 初步赋值，如何没有，_generateListTable会重新计算并赋值
     this.element.style.left = this.taskTableWidth ? `${this.taskTableWidth}px` : '0px';
 
+    // 生成甘特图容器，并放到传递的container中
     this.canvas = document.createElement('canvas');
     this.element.appendChild(this.canvas);
     this.context = this.canvas.getContext('2d')!;
@@ -192,7 +211,9 @@ export class Gantt extends EventTarget {
     } else {
       this._updateSize();
     }
+    // _generateListTable创建左侧表格，如果上面的this.taskTableWidth是-1，会继续调用this._updateSize
     this._generateListTable();
+    // 获取实例化后表格的高度数据
     this._syncPropsFromTable();
 
     createSplitLineAndResizeLine(this);
@@ -209,6 +230,7 @@ export class Gantt extends EventTarget {
   }
   /**
    * 窗口尺寸发生变化 或者像数比变化
+   * 设置右侧甘特图所在元素的style.width和style.height，会获取container的宽高，并减去左侧表格盒子的this.taskTableWidth
    * @return {void}
    */
   _updateSize(): void {
@@ -216,9 +238,11 @@ export class Gantt extends EventTarget {
     let heightP = 0;
 
     if (Env.mode === 'browser') {
+      // 获取创建的甘特图的父级div
       const element = this.getElement();
       let widthWithoutPadding = 0;
       let heightWithoutPadding = 0;
+      // 获取甘特图所在html元素的父节点（一般就是this.container，放表格和甘特图）排除padding后的宽高
       if (element.parentElement) {
         const computedStyle = element.parentElement.style || window.getComputedStyle(element.parentElement); // 兼容性处理
         widthWithoutPadding =
@@ -230,6 +254,7 @@ export class Gantt extends EventTarget {
           parseInt(computedStyle.paddingTop || '0px', 10) -
           parseInt(computedStyle.paddingBottom || '0px', 20);
       }
+      // 减去左边表格，剩下的就是甘特图的宽度。用户没有定义this.taskTableWidth时，它被赋值为-1，后面有值后会再次执行this._updateSize
       const width1 = (widthWithoutPadding ?? 1) - 1 - this.taskTableWidth;
       const height1 = (heightWithoutPadding ?? 1) - 1;
 
@@ -274,6 +299,9 @@ export class Gantt extends EventTarget {
       this.tableNoFrameHeight = height - lineWidth * 2;
     }
   }
+  /**
+   * 实例化表格this.taskListTableInstance，计算左侧表格盒子所占宽度，调整右侧甘特图的宽高，如果表格是多级表头，会调整对齐甘特图的每级表头高度
+   */
   _generateListTable() {
     if (this.taskTableColumns.length >= 1 || this.options?.rowSeriesNumber) {
       const listTableOption = this._generateListTableOptions();
@@ -296,7 +324,9 @@ export class Gantt extends EventTarget {
         this._updateSize();
       }
 
+      // 如果表格是多级表头
       if (this.taskListTableInstance.columnHeaderLevelCount > 1) {
+        // 根据甘特图的表头高度，调整表格的每级表头的具体高度
         if (this.taskListTableInstance.columnHeaderLevelCount === this.parsedOptions.timeLineHeaderRowHeights.length) {
           for (let i = 0; i < this.taskListTableInstance.columnHeaderLevelCount; i++) {
             this.taskListTableInstance.setRowHeight(i, this.parsedOptions.timeLineHeaderRowHeights[i]);
@@ -313,11 +343,13 @@ export class Gantt extends EventTarget {
   _generateListTableOptions() {
     const listTable_options: ListTableConstructorOptions = {};
     const needPutInListTableKeys = ['container', 'records', 'rowSeriesNumber', 'overscrollBehavior', 'pixelRatio'];
+    // 获取this.options中需要放入listTable_options的属性
     for (const key in this.options) {
       if (needPutInListTableKeys.indexOf(key) >= 0) {
         listTable_options[key] = this.options[key];
       }
     }
+    // this.options.taskListTable中的属性全部放入listTable_options
     for (const key in this.options.taskListTable) {
       listTable_options[key] = this.options.taskListTable[key];
       if (key === 'columns') {
@@ -513,7 +545,10 @@ export class Gantt extends EventTarget {
   getContainer(): HTMLElement {
     return this.element.parentElement;
   }
-
+  /**
+   * 读取甘特图表头时间刻度配置optinos.timelineHeader.scales，调整顺序后放到this.parsedOptions里，用来渲染甘特图日历表头,
+   * 按年、季度、月、周、日排序，越靠前代表表头越顶级，年是一级表头，季度是二级表头，以此类推
+   */
   _sortScales() {
     const { timelineHeader } = this.options;
     if (timelineHeader) {
@@ -545,11 +580,15 @@ export class Gantt extends EventTarget {
     }
   }
 
+  /**
+   * 将排序好的timelineHeader.scales，根据maxDate、minDate，生成具体的日历列表头，并计算每格中一天所占宽度
+   */
   _generateTimeLineDateMap() {
     const startDate = createDateAtMidnight(this.parsedOptions.minDate);
     const endDate = createDateAtMidnight(this.parsedOptions.maxDate);
     let colWidthIncludeDays = 1000000;
     // Iterate over each scale
+    // 遍历每级表头，算出每级表头包含的列，每列包含列名及每列代表的始末时间，这个列放到timelineDates中
     for (const scale of this.parsedOptions.reverseSortedTimelineScales) {
       // Generate the sub-columns for each step within the scale
       const currentDate = createDateAtMidnight(startDate);
@@ -575,6 +614,10 @@ export class Gantt extends EventTarget {
   getAllRowsHeight() {
     return this.getAllHeaderRowsHeight() + this.itemCount * this.parsedOptions.rowHeight;
   }
+  /**
+   * 获取所有甘特图多级表头的高度
+   * @returns the total height of the header rows
+   */
   getAllHeaderRowsHeight() {
     // if (Array.isArray(this.parsedOptions.timeLineHeaderRowHeights)) {
     return this.parsedOptions.timeLineHeaderRowHeights.reduce((acc, curr, index) => {
@@ -723,6 +766,9 @@ export class Gantt extends EventTarget {
     this.scenegraph.resize();
     updateSplitLineAndResizeLine(this);
   }
+  /**
+   * 获取左侧表格非表头的行数itemCount，表头总高度headerHeight，并计算出甘特图整体表格对应的高度drawHeight，以及排除表头后的表体高度gridHeight
+   */
   _syncPropsFromTable() {
     this.itemCount = this.taskListTableInstance
       ? this.taskListTableInstance.rowCount - this.taskListTableInstance.columnHeaderLevelCount

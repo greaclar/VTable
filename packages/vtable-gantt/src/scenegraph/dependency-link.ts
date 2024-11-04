@@ -55,11 +55,17 @@ export class DependencyLink {
     const link = dependencyLinks[index];
     const { linkedToTaskKey, linkedFromTaskKey, type } = link;
     const linkedToTaskRecord = findRecordByTaskKey(this._scene._gantt.records, taskKeyField, linkedToTaskKey);
+    if (!linkedToTaskRecord) {
+      return console.log('linkedToTaskRecord not found');
+    }
     if (!linkedToTaskRecord.record.vtable_gantt_linkedTo) {
       linkedToTaskRecord.record.vtable_gantt_linkedTo = [];
     }
     linkedToTaskRecord.record.vtable_gantt_linkedTo.push(link);
     const linkedFromTaskRecord = findRecordByTaskKey(this._scene._gantt.records, taskKeyField, linkedFromTaskKey);
+    if (!linkedFromTaskRecord) {
+      return console.log('linkedFromTaskRecord not found');
+    }
     if (!linkedFromTaskRecord.record.vtable_gantt_linkedFrom) {
       linkedFromTaskRecord.record.vtable_gantt_linkedFrom = [];
     }
